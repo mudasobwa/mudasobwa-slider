@@ -1,4 +1,222 @@
 <link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../core-ajax/core-ajax.html">
+<link rel="import" href="../polymer-fontawesome/polymer-fontawesome.html">
+
+<!--
+Core element for handling content, being shown by slider. Performs
+ajax requests against server, expects an answer in the form
+`{ text: '', caption: '', prev:'', next:'' }`.
+Loads the unloaded parts from the server, handles cache for already
+loaded items.
+
+**not visible**
+
+##### Example
+
+    <mudasobwa-content-loader id="content"
+                              url="{{ url }}"
+                              article="{{ article }}"
+                              prefetch>
+    </mudasobwa-content-loader>
+
+@element mudasobwa-content-loader
+@blurb Core element for handling content.
+@status alpha
+@homepage http://mudasobwa.github.io/mudasobwa-slider
+-->
+<polymer-element name="mudasobwa-content-loader" attributes="url article caption prefetch next prev stateable">
+	<template>
+		<style>
+			:host { display: none; }
+		</style>
+
+		<core-ajax id="current"
+							 url="{{ url }}"
+							 on-core-response="{{ contentLoaded }}"
+							 handleAs="json">
+		</core-ajax>
+		<template id="prevnext" if="{{ prefetch }}">
+			<mudasobwa-content-loader id="prev" url="{{ prev }}"></mudasobwa-content-loader>
+			<mudasobwa-content-loader id="next" url="{{ next }}"></mudasobwa-content-loader>
+		</template>
+	</template>
+
+	<script>
+		Polymer('mudasobwa-content-loader', {
+			/**
+			 * The `changed` event fired whether content was reloaded. It will not be fired
+			 *   unless `stateable` attribute is set.
+			 *
+			 * @event changed
+			 */
+
+			/**
+			 * Nested elements are to load content only on the initial appearance.
+			 *
+			 * @property initialized
+			 * @type bool
+			 */
+			initialized: false, // this is ugly
+
+			created: function() {
+				this.url = null;
+				this.prefetch = false;
+				this.article = '';
+				this.caption = '';
+				this.prev = null;
+				this.next = null;
+			},
+
+			attached: function() {
+				this.reload();
+			},
+
+			/**
+			 * Forces reloading of content.
+			 *
+			 * @method reload
+			 * @return {null} Returns nothing.
+			 */
+			reload: function() {
+				if(typeof this.url === 'string') {
+					this.$.current.go();
+				}
+			},
+
+			/**
+			 * Is being called on ajax core response. Handles the neste
+			 *   `prev`/`next` elements’ content on first run.
+			 *
+			 * @method contentLoaded
+			 * @return {null} Returns nothing.
+			 */
+			contentLoaded: function() {
+				this.article = this.$.current.response.text;
+				this.caption = this.$.current.response.caption;
+				this.prev = this.$.current.response.prev;
+				this.next = this.$.current.response.next;
+
+				if(!this.initialized) {
+					this.initialized = true;
+					if(this.prefetch) {
+						this.$.prev.reload();
+						this.$.next.reload();
+						if(this.stateable) {
+							this.saveState();
+						}
+					}
+				}
+			},
+
+			/**
+			 * Forces reloading of the main content basing on `prev`/`next` parameters.
+			 *
+			 * @method step
+			 * @return {null} Returns nothing.
+			 * @param {bool} forward loads `next` when `true`, `prev` otherwise
+			 */
+			step: function(forward) {
+				this.url = ((true === forward) ? this.next: this.prev);
+				this.reload();
+			},
+
+			/**
+			 * Duplicates content and parameters from supplied element.
+			 * @return {null} Returns nothing.
+			 * @param {Object} other the element to copy data from.
+			 */
+			dup: function(other) {
+				if(typeof other !== 'undefined') {
+					var url = other.url;
+					this.next = other.next;
+					this.prev = other.prev;
+					this.url = url; // this must be after next/prev setting (to prevent re-autosetting)
+					this.caption = other.caption;
+					this.article = other.article;
+				} else {
+					this.url = this.next = this.prev = this.caption = this.article = null;
+				}
+			},
+
+			/**
+			 * Fires `change` event when main url is changed.
+			 *
+			 * @see changed
+			 * @return {null} Returns nothing.
+			 */
+			urlChanged: function() {
+				if(this.prefetch) {
+					this.fire("changed", { url: this.url });
+				}
+			},
+
+			/**
+			 * Main handler.
+			 *
+			 * @return {null} Returns nothing.
+			 * @param {bool} previous will change content to `prev` if true, to `next` otherwise
+			 */
+			yo: function(previous) {
+				if(!this.prefetch) {
+					this.step(previous !== true);
+				} else {
+					if(previous === true) {
+						this.$.next.dup(this);
+						this.dup(this.$.prev);
+						this.$.prev.step(false);
+					} else {
+						this.$.prev.dup(this);
+						this.dup(this.$.next);
+						this.$.next.step(true);
+					}
+				}
+				if(this.stateable) {
+					this.saveState();
+				}
+			},
+
+			/**
+			 * Saves current state in history.
+			 */
+			saveState: function() {
+				if(this.url) {
+					var _url = this.url;
+					var _state = _url.replace(new RegExp('☆'), '★'); // FIXME
+					var _caption = this.caption;
+					History.pushState({
+						state: _state,
+						url: _url,
+						caption: _caption,
+						sender: 'mudasobwa:yo'
+					}, _caption, _state);
+				}
+			}
+		});
+	</script>
+</polymer-element>
+
+<!--
+Opaque nifty button (used for `prev`/`next` navigation.
+-->
+<polymer-element name="opaque-button" noscript>
+	<template>
+		<style>
+			:host {
+				width: auto;
+				height: auto;
+				margin: 0;
+				padding: 0;
+				position: absolute;
+				top: 0;
+				opacity: 0.5;
+				transition: opacity 800ms ease-in-out;
+				cursor: pointer;
+			}
+			:host(:hover) { opacity: 1; }
+		</style>
+		<content></content>
+	</template>
+</polymer-element>
 
 <!--
 Element providing solution to no problem in particular.
@@ -12,57 +230,110 @@ Element providing solution to no problem in particular.
 @status alpha
 @homepage http://mudasobwa.github.io/mudasobwa-slider
 -->
-<polymer-element name="mudasobwa-slider" attributes="notitle">
+<polymer-element name="mudasobwa-slider" attributes="url caption buttons previcon nexticon stateable">
+	<template>
+		<style>
+			:host {
+				display: block;
+				position: relative;
+				opacity: 0.8;
+				transition: opacity .5s, transform 1s;
+			}
+			div.slider-content { margin: 0 4em; padding: 0; }
+			#prevnexthint { font-size: 120%; font-weight: 700; }
+		</style>
+		<div class="slider-container">
+			<template if="{{ buttons === 'prev' || buttons === 'both' }}">
+				<style>
+					#prevbtn { left: 0.4em; }
+				</style>
+				<opaque-button id="prevbtn"
+											 on-mouseover="{{ buttonHover }}"
+											 on-click="{{ buttonClick }}"><font-awesome icon="{{ previcon }}"></font-awesome></opaque-button>
+			</template>
+			<template if="{{ buttons === 'next' || buttons === 'both' }}"> <!-- FIXME ------- WHY /next/.test(buttons) sucks??? -->
+				<style>
+					#nextbtn { right: 0.4em; }
+				</style>
+				<opaque-button id="nextbtn"
+											 on-mouseover="{{ buttonHover }}"
+											 on-click="{{ buttonClick }}"><font-awesome icon="{{ nexticon }}"></font-awesome></opaque-button>
+			</template>
 
-  <template>
-
-    <link rel="stylesheet" href="mudasobwa-slider.css" />
-
-    <content></content>
-
-  </template>
-
-  <script>
-
-    Polymer('mudasobwa-slider', {
-      /**
-       * The `noevent` event is not actually fired from here,
-       * we document it as an example of documenting events.
-       *
-       * @event noevent
-       */
-
-      /**
-       * The `notitle` attribute does not yet have a purpose.
-       *
-       * @attribute notitle
-       * @type string
-       */
-      notitle: '',
-
-      /**
-       * The `aProp` is a property that does something cool.
-       *
-       * @property aProp
-       * @type bool
-       */
-      aProp: false,
-
-      ready: function() {
-      },
-
-      /**
-       * The `task` method does no work at this time.
-       *
-       * @method task
-       * @return {Object} Returns undefined.
-       * @param {String} dummy Serves no purpose today.
-       */
-      task: function(dummy) {
-      }
-
-    });
-
-  </script>
-
+			<div class="slider-content">
+				<mudasobwa-content-loader id="content"
+																	url="{{ url }}"
+																	article="{{ article }}"
+																	prefetch
+																	stateable="{{ stateable }}"></mudasobwa-content-loader>
+				<mudasobwa-parser id="placeholder" input="{{ article }}" url="{{ url }}"></mudasobwa-parser>
+			</div>
+		</div>
+	</template>
+	<script>
+		Polymer('mudasobwa-slider', {
+			created: function() {
+				this.previcon = "angle-double-left";
+				this.nexticon = "angle-double-right";
+			},
+			articleChanged: function() {
+				this.caption = this.$.content.caption;
+				if(typeof this.$.prevbtn !== 'undefined') {
+					this.$.prevbtn.style.display = ('null' === String(this.$.content.prev)) ? 'none' : 'block';
+				}
+				if(typeof this.$.nextbtn !== 'undefined') {
+					this.$.nextbtn.style.display = ('null' === String(this.$.content.next)) ? 'none' : 'block';
+				}
+			},
+			goto: function(url) {
+				if(this.url !== url) {
+					this.url = url;
+					this.$.content.reload();
+				}
+			},
+			buttonClick: function(event, detail, sender) {
+				this.$.content.yo(sender.id === "prevbtn");
+			},
+			buttonHover: function(event, detail, sender) {
+			}
+		});
+	</script>
 </polymer-element>
+
+<polymer-element name="mudasobwa-article"  extends="mudasobwa-slider">
+	<template>
+		<style>
+			:host { display: block; min-height: 42em; }
+			polyfill-next-selector { content: 'font-awesome'; }
+			::content font-awesome { font-size: 48px; }
+		</style>
+		<shadow></shadow>
+	</template>
+	<script>
+		Polymer('mudasobwa-article', {
+			attached: function() {
+				this.super();
+				var self = this;
+				(function(window, undefined){
+					History.Adapter.bind(window, 'statechange', function() {
+						var state = History.getState();
+						if(state.data['sender'] === 'mudasobwa:yo') {
+							self.goto(state.data['url']);
+						}
+					});
+				})(window);
+			},
+			articleChanged: function() {
+				this.super();
+
+				var root = this;
+				while (root.parentNode) {
+					root = root.parentNode;
+				}
+				root.caption = this.caption;
+			}
+
+		});
+	</script>
+</polymer-element>
+
