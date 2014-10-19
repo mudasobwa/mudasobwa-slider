@@ -112,7 +112,7 @@ loaded items.
 					if(this.prefetch) {
 						this.$.prev.reload();
 						this.$.next.reload();
-						if(this.stateable) {
+						if(typeof this.stateable !== "undefined") {
 							this.saveState();
 						}
 					}
@@ -133,6 +133,8 @@ loaded items.
 
 			/**
 			 * Duplicates content and parameters from supplied element.
+			 *
+			 * @method dup
 			 * @return {null} Returns nothing.
 			 * @param {Object} other the element to copy data from.
 			 */
@@ -153,6 +155,7 @@ loaded items.
 			/**
 			 * Fires `change` event when main url is changed.
 			 *
+			 * @method urlChanged
 			 * @see changed
 			 * @return {null} Returns nothing.
 			 */
@@ -165,6 +168,7 @@ loaded items.
 			/**
 			 * Main handler.
 			 *
+			 * @method yo
 			 * @return {null} Returns nothing.
 			 * @param {bool} previous will change content to `prev` if true, to `next` otherwise
 			 */
@@ -182,7 +186,7 @@ loaded items.
 						this.$.next.step(true);
 					}
 				}
-				if(this.stateable) {
+				if(typeof this.stateable !== "undefined") {
 					this.saveState();
 				}
 			},
@@ -191,7 +195,6 @@ loaded items.
 			 * Saves current state in history.
 			 */
 			saveState: function() {
-				console.log(this.href);
 				if(this.url) {
 					var _url = this.url;
 					var _href = this.href;
@@ -210,11 +213,6 @@ loaded items.
 
 <!--
 Opaque nifty button (used for `prev`/`next` navigation.
-
-@element opaque-button
-@blurb Opaque nifty button (used for `prev`/`next` navigation.
-@status alpha
-@homepage http://mudasobwa.github.io/mudasobwa-slider
 -->
 <polymer-element name="opaque-button" noscript>
 	<template>
@@ -232,6 +230,9 @@ Opaque nifty button (used for `prev`/`next` navigation.
 	</template>
 </polymer-element>
 
+<!--
+Parser of incoming through json content. Mainly HTML copy-past.
+-->
 <polymer-element name="mudasobwa-parser" attributes="input url">
 	<template>
 		<style>
@@ -256,14 +257,15 @@ Opaque nifty button (used for `prev`/`next` navigation.
 </polymer-element>
 
 <!--
-Element providing solution to no problem in particular.
+Base for all visual widgets. Loads content of previous/next articles asynchronously.
 
 ##### Example
 
-    <mudasobwa-slider></mudasobwa-slider>
+    <mudasobwa-slider url='demo.html?0' stateable></mudasobwa-slider>
 
 @element mudasobwa-slider
-@blurb Element providing solution to no problem in particular.
+@see mudasobwa-content-loader
+@blurb Element providing representation of json-loaded content.
 @status alpha
 @homepage http://mudasobwa.github.io/mudasobwa-slider
 -->
@@ -345,7 +347,7 @@ Element providing solution to no problem in particular.
 												 on-click="{{ buttonClick }}"><font-awesome icon="{{ previcon }}"></font-awesome></opaque-button>
 				</div>
 			</template>
-			<template if="{{ buttons === 'next' || buttons === 'both' }}"> <!-- FIXME ------- WHY /next/.test(buttons) sucks??? -->
+			<template if="{{ buttons === 'next' || buttons === 'both' }}">
 				<div id="nextbtn-container">
 					<opaque-button id="nextbtn"
 												 on-mouseover="{{ buttonHover }}"
@@ -360,6 +362,20 @@ Element providing solution to no problem in particular.
 				this.previcon = "angle-double-left";
 				this.nexticon = "angle-double-right";
 			},
+			attached: function() {
+				this.super();
+				if(typeof this.stateable !== 'undefined') {
+					var self = this;
+					(function(window, undefined){
+						History.Adapter.bind(window, 'statechange', function() {
+							var state = History.getState();
+							if(state.data['sender'] === 'mudasobwa:yo') {
+								self.goto(state.data['url']);
+							}
+						});
+					})(window);
+				}
+			},
 			articleChanged: function() {
 				this.caption = this.$.content.caption;
 				if(typeof this.$.prevbtn !== 'undefined') {
@@ -368,6 +384,12 @@ Element providing solution to no problem in particular.
 				if(typeof this.$.nextbtn !== 'undefined') {
 					this.$.nextbtn.style.display = ('null' === String(this.$.content.next)) ? 'none' : 'block';
 				}
+
+				var root = this;
+				while (root.parentNode) {
+					root = root.parentNode;
+				}
+				root.caption = this.caption;
 			},
 			goto: function(url) {
 				if(this.url !== url) {
@@ -384,10 +406,23 @@ Element providing solution to no problem in particular.
 	</script>
 </polymer-element>
 
+<!--
+Article stack representation. Shows
+
+##### Example
+
+    <mudasobwa-slider url='demo.html?0' stateable></mudasobwa-slider>
+
+@element mudasobwa-article
+@see mudasobwa-content-loader
+@blurb Element providing representation of json-loaded content.
+@status alpha
+@homepage http://mudasobwa.github.io/mudasobwa-slider
+-->
 <polymer-element name="mudasobwa-article"  extends="mudasobwa-slider">
 	<template>
 		<style>
-			:host { display: block; min-height: 42em; }
+			:host { display: block; }
 			polyfill-next-selector { content: 'font-awesome'; }
 			::content font-awesome { font-size: 48px; }
 		</style>
@@ -395,29 +430,6 @@ Element providing solution to no problem in particular.
 	</template>
 	<script>
 		Polymer('mudasobwa-article', {
-			attached: function() {
-				this.super();
-				this.stateable = true;
-				var self = this;
-				(function(window, undefined){
-					History.Adapter.bind(window, 'statechange', function() {
-						var state = History.getState();
-						if(state.data['sender'] === 'mudasobwa:yo') {
-							self.goto(state.data['url']);
-						}
-					});
-				})(window);
-			},
-			articleChanged: function() {
-				this.super();
-
-				var root = this;
-				while (root.parentNode) {
-					root = root.parentNode;
-				}
-				root.caption = this.caption;
-			}
-
 		});
 	</script>
 </polymer-element>
