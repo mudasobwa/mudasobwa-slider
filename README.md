@@ -1,7 +1,7 @@
 mudasobwa-slider
 ================
 
-See the [component page](http://mudasobwa.github.io/mudasobwa-slider) for more information.
+See the [component page](http://slider.mudasobwa.ru/mudasobwa-slider/index.html) for more information.
 
 ## Getting Started
 
